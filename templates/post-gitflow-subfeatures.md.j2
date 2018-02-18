@@ -1,0 +1,247 @@
+{% extends 'base.md.j2' %}
+{% block lead_paragraph %}
+
+I'm a huge fan of `gitflow`. It's made my life much easier. However, I've noticed recently that, as the codebase grows, features can become disorganized or unwieldy. `gitflow-avh` solves this problem incredibly well by allowing features to be based off any branch.
+
+{% endblock %}
+{% block content %}
+## Problem
+
+After reading the intro, you might be thinking that my features are too large. On the contrary, I'm a pedant with a penchant for pigeonholing things. Let's say you want to add feature `foo`:
+
+* `foo-dependency` must be built for `foo`
+* `foo-dependency` must be tested
+* `foo` must be built
+* `foo` must be tested
+
+Assume `foo-dependency` is only used by `foo`.
+
+### Feature Per Item
+
+Your flow could look like this:
+
+{{
+    shell_session("""
+$ git flow feature start add-foo-dependency
+$ touch src/foo-dependency.ext
+$ git add src/foo-dependency.ext
+$ git commit -m 'Create foo-dependency'
+$ git flow feature finish --no-ff add-foo-dependency
+$ git flow feature start test-foo-dependency
+$ touch tests/foo-dependency.ext
+$ git add tests/foo-dependency.ext
+$ git commit -m 'Test foo-dependency'
+$ git flow feature finish --no-ff test-foo-dependency
+$ git flow feature start add-foo
+$ touch src/foo.ext
+$ git add src/foo.ext
+$ git commit -m 'Create foo'
+$ git flow feature finish --no-ff add-foo
+$ git flow feature start test-foo
+$ touch tests/foo.ext
+$ git add tests/foo.ext
+$ git commit -m 'Test foo'
+$ git flow feature finish --no-ff test-foo
+$ git log --graph --all --topo-order --decorate --oneline --boundary --color=always
+""")
+}}
+
+{{ graph('four-features') }}
+
+I'm not a huge fan of this approach, because `add-foo-dependency` and `add-foo` both merge untested code directly into the `dev` branch. While each feature does exactly one thing, the one thing sorta causes organizational problems. I don't like untested code floating around in a main branch when I can avoid it.
+
+### Two Features
+
+It could also look like this:
+
+{{
+    shell_session("""
+$ git flow feature start add-foo-dependency
+$ touch src/foo-dependency.ext
+$ git add src/foo-dependency.ext
+$ git commit -m 'Create foo-dependency'
+$ touch tests/foo-dependency.ext
+$ git add tests/foo-dependency.ext
+$ git commit -m 'Test foo-dependency'
+$ git flow feature finish --no-ff add-foo-dependency
+$ git flow feature start add-foo
+$ touch src/foo.ext
+$ git add src/foo.ext
+$ git commit -m 'Create foo'
+$ touch tests/foo.ext
+$ git add tests/foo.ext
+$ git commit -m 'Test foo'
+$ git flow feature finish --no-ff add-foo
+$ git log --graph --all --topo-order --decorate --oneline --boundary --color=always
+""")
+}}
+
+{{ graph('two-features') }}
+
+While this avoids merging untested code, it merges totally useless code with `foo-dependency`. If there's any appreciable time between `add-foo-dependency` and `add-foo`, someone else might create a feature that removes `foo-dependency` by merit of its unnecessary inclusion.
+
+### One Feature
+
+Or it could look like this:
+
+{{
+    shell_session("""
+$ git flow feature start add-foo
+$ touch src/foo-dependency.ext
+$ git add src/foo-dependency.ext
+$ git commit -m 'Create foo-dependency'
+$ touch tests/foo-dependency.ext
+$ git add tests/foo-dependency.ext
+$ git commit -m 'Test foo-dependency'
+$ touch src/foo.ext
+$ git add src/foo.ext
+$ git commit -m 'Create foo'
+$ touch tests/foo.ext
+$ git add tests/foo.ext
+$ git commit -m 'Test foo'
+$ git flow feature finish --no-ff add-foo
+$ git log --graph --all --topo-order --decorate --oneline --boundary --color=always
+""")
+}}
+
+{{ graph('one-feature') }}
+
+If `foo` is a bit more complicated than `touch`ing a few files, this gets messy fast. `foo-dependency` and `foo` (as well as their associated tests) will probably have a ton of commits, which defeats the purpose of splitting out the branches.
+
+## Solution
+
+[The `gitflow-avh` project](https://github.com/petervanderdoes/gitflow-avh) attempts to update and extend `gitflow` with some useful features. As far as I know, it's a drop-in replacement for `gitflow`, so you won't notice a difference.
+
+### Installation
+
+See [the official docs](https://github.com/petervanderdoes/gitflow-avh/wiki/Installation) for detailed instructions. Depending on your OS, you might be able to find it via a package manager as `gitflow-avh`. If not, you can [install manually](https://github.com/petervanderdoes/gitflow-avh/wiki/Installing-on-Linux,-Unix,-etc.#manual) without much trouble:
+
+{{
+    highlight_block("""
+#!/bin/bash
+# This is basically the wiki's installation script except more complicated
+
+if which wget >/dev/null; then
+    wget --no-check-certificate -q  https://raw.githubusercontent.com/petervanderdoes/gitflow-avh/develop/contrib/gitflow-installer.sh
+elif which curl >/dev/null; then
+    curl -fLO https://raw.githubusercontent.com/petervanderdoes/gitflow-avh/develop/contrib/gitflow-installer.sh
+else
+    echo 'Unable to download installer'
+    exit 1
+fi
+sudo bash gitflow-installer.sh
+rm -f gitflow-installer.sh
+""",
+        explicit_lexer_name = 'BashLexer',
+        title = 'install-gitflow-avh',
+        external_source_link = 'https://github.com/petervanderdoes/gitflow-avh/wiki/Installing-on-Linux,-Unix,-etc.#manual'
+    )
+}}
+
+### Using Subfeatures
+
+Vanilla `gitflow` bases all features off the `dev` branch.
+
+{{
+    shell_session("""
+$ git flow feature start do-something
+Switched to a new branch 'feature/do-something'
+
+Summary of actions:
+- A new branch 'feature/do-something' was created, based on 'dev'
+- You are now on branch 'feature/do-something'
+
+Now, start committing on your feature. When done, use:
+
+     git flow feature finish do-something
+$ git flow feature finish do-something
+Switched to branch 'dev'
+Already up to date.
+Deleted branch feature/do-something (was 6c3fe58).
+
+Summary of actions:
+- The feature branch 'feature/do-something' was merged into 'dev'
+- Feature branch 'feature/do-something' has been locally deleted
+- You are now on branch 'dev'
+""")
+}}
+
+With `gitflow-avh`, you can base features off any branch, which means when you finish it, it's merged back into the source branch.
+
+{{
+    shell_session("""
+$ git flow feature start do-something
+Switched to a new branch 'feature/do-something'
+
+Summary of actions:
+- A new branch 'feature/do-something' was created, based on 'dev'
+- You are now on branch 'feature/do-something'
+
+Now, start committing on your feature. When done, use:
+
+     git flow feature finish do-something
+$ git flow feature start subtask feature/do-something
+Switched to a new branch 'feature/subtask'
+
+Summary of actions:
+- A new branch 'feature/subtask' was created, based on 'feature/do-something'
+- You are now on branch 'feature/subtask'
+
+Now, start committing on your feature. When done, use:
+
+     git flow feature finish subtask
+$ git flow feature finish subtask
+Switched to branch 'feature/do-something'
+Already up to date.
+Deleted branch feature/subtask (was 6c3fe58).
+
+Summary of actions:
+- The feature branch 'feature/subtask' was merged into 'feature/do-something'
+- Feature branch 'feature/subtask' has been locally deleted
+- You are now on branch 'feature/do-something'
+$ git flow feature finish do-something
+Switched to branch 'dev'
+Already up to date.
+Deleted branch feature/do-something (was 6c3fe58).
+
+Summary of actions:
+- The feature branch 'feature/do-something' was merged into 'dev'
+- Feature branch 'feature/do-something' has been locally deleted
+- You are now on branch 'dev'
+""")
+}}
+
+### Problem Solved with Subfeatures
+
+{{
+    shell_session("""
+$ git flow feature start add-foo
+$ git flow feature start add-foo-dependency feature/add-foo
+$ git flow feature start create-foo-dependency feature/add-foo-dependency
+$ touch src/foo-dependency.ext
+$ git add src/foo-dependency.ext
+$ git commit -m 'Create foo-dependency'
+$ git flow feature finish --no-ff create-foo-dependency
+$ git flow feature start test-foo-dependency feature/add-foo-dependency
+$ touch test/foo-dependency.ext
+$ git add tests/foo-dependency.ext
+$ git commit -m 'Test foo-dependency'
+$ git flow feature finish --no-ff test-foo-dependency
+$ git flow feature finish --no-ff add-foo-dependency
+$ git flow feature start create-foo feature/add-foo
+$ touch src/foo.ext
+$ git add src/foo.ext
+$ git commit -m 'Create foo'
+$ git flow feature finish --no-ff create-foo
+$ git flow feature start test-foo feature/add-foo
+$ touch tests/foo.ext
+$ git add tests/foo.ext
+$ git commit -m 'Test foo'
+$ git flow feature finish --no-ff test-foo
+$ git flow feature finish --no-ff add-foo
+$ git log --graph --all --topo-order --decorate --oneline --boundary --color=always
+""")
+}}
+
+{{ graph('with-subfeatures') }}
+{% endblock %}
